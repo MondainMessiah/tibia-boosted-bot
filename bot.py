@@ -4,83 +4,81 @@ import schedule
 import time
 from datetime import datetime
 
-# Replace with your Discord webhook URL
-WEBHOOK_URL = 'https://discord.com/api/webhooks/YOUR_WEBHOOK_URL'
+# ✅ Your Discord webhook
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1384231438987038782/qmljoAKv6ZpJWr4_KdxxPwz2bAssq0APa0lC00U0Ch8EzPqbHqhD8NOLU9Ba7JEkpaw2'
 
 def fetch_boosted_info():
     try:
-        # Send a GET request to the TibiaRoute website
         response = requests.get('https://tibiaroute.com')
         response.raise_for_status()
 
-        # Parse the HTML content of the page
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Find the section containing the boosted information
         boosted_section = soup.find('section', {'id': 'boosted'})
-
-        if boosted_section:
-            # Extract the boosted boss and creature names
-            boosted_boss = boosted_section.find('div', {'class': 'boss'}).get_text(strip=True)
-            boosted_creature = boosted_section.find('div', {'class': 'creature'}).get_text(strip=True)
-
-            return boosted_boss, boosted_creature
-        else:
-            print("Boosted information not found on the page.")
+        if not boosted_section:
             return None, None
 
-    except requests.RequestException as e:
-        print(f"Error fetching data: {e}")
+        boss_div = boosted_section.find('div', class_='boss')
+        creature_div = boosted_section.find('div', class_='creature')
+
+        boosted_boss = boss_div.get_text(strip=True) if boss_div else "Unknown"
+        boosted_creature = creature_div.get_text(strip=True) if creature_div else "Unknown"
+
+        return boosted_boss, boosted_creature
+
+    except Exception as e:
+        print(f"[ERROR] Boosted info fetch failed: {e}")
         return None, None
 
 def fetch_events():
     try:
-        # Send a GET request to the TibiaRoute website
         response = requests.get('https://tibiaroute.com')
         response.raise_for_status()
 
-        # Parse the HTML content of the page
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Find the section containing the events information
         events_section = soup.find('section', {'id': 'events'})
 
-        if events_section:
-            # Extract the events
-            events = events_section.find_all('div', {'class': 'event'})
-            event_list = [event.get_text(strip=True) for event in events]
-            return event_list
-        else:
-            print("Events information not found on the page.")
+        if not events_section:
             return []
 
-    except requests.RequestException as e:
-        print(f"Error fetching data: {e}")
+        events = events_section.find_all('div', class_='event')
+        event_texts = [event.get_text(strip=True) for event in events]
+        return event_texts
+
+    except Exception as e:
+        print(f"[ERROR] Events fetch failed: {e}")
         return []
 
 def send_to_discord(boss, creature, events):
+    events_text = "\n".join([f"- {e}" for e in events]) if events else "No events listed."
     message = {
-        'content': f"🚨 **Tibia Boosted Today** 🚨\n\n🧟 Boosted Creature: **{creature}**\n👹 Boosted Boss: **{boss}**\n\n🎉 **Today's Events:**\n" + "\n".join(events)
+        "content": f"🚨 **Tibia Daily Info** 🚨\n\n"
+                   f"🧟 **Boosted Creature:** {creature}\n"
+                   f"👹 **Boosted Boss:** {boss}\n\n"
+                   f"🎉 **Events Today:**\n{events_text}"
     }
+
     try:
         response = requests.post(WEBHOOK_URL, json=message)
         response.raise_for_status()
-        print("Notification sent to Discord.")
-    except requests.RequestException as e:
-        print(f"Error sending notification: {e}")
+        print("[INFO] Message sent successfully.")
+    except Exception as e:
+        print(f"[ERROR] Failed to send message to Discord: {e}")
 
 def job():
-    print(f"Running job at {datetime.now()}")
-    boosted_boss, boosted_creature = fetch_boosted_info()
+    print(f"[INFO] Running job at {datetime.utcnow().isoformat()} UTC")
+    boss, creature = fetch_boosted_info()
     events = fetch_events()
-    if boosted_boss and boosted_creature:
-        send_to_discord(boosted_boss, boosted_creature, events)
+    if boss and creature:
+        send_to_discord(boss, creature, events)
+    else:
+        print("[WARN] Boosted info incomplete. Skipping message.")
 
-# Schedule the job to run daily at 9:05 AM UTC
+# ⏰ Schedule the job daily at 9:05 AM UTC
 schedule.every().day.at("09:05").do(job)
 
 if __name__ == "__main__":
-    print("Bot is running...")
+    print("[INFO] Bot started. Waiting for schedule...")
     while True:
         schedule.run_pending()
-        time.sleep(60)  # Wait for one minute
+        time.sleep(60)
